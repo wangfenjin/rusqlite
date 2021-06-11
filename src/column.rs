@@ -218,7 +218,7 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     fn test_column_name_reference() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        db.execute_batch("CREATE TABLE y (x);")?;
+        db.execute_batch("CREATE TABLE y (x integer);")?;
         let stmt = db.prepare("SELECT x FROM y;")?;
         let column_name = stmt.column_name(0)?;
         assert_eq!("x", column_name);

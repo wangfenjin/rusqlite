@@ -319,8 +319,8 @@ mod test {
     #[test]
     fn pragma_query_value() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let user_version: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        assert_eq!(0, user_version);
+        let version: String = db.pragma_query_value(None, "version", |row| row.get(0))?;
+        assert!(0 < version.len());
         Ok(())
     }
 
@@ -337,26 +337,15 @@ mod test {
     }
 
     #[test]
-    fn pragma_query_no_schema() -> Result<()> {
-        let db = Connection::open_in_memory()?;
-        let mut user_version = -1;
-        db.pragma_query(None, "user_version", |row| {
-            user_version = row.get(0)?;
-            Ok(())
-        })?;
-        assert_eq!(0, user_version);
-        Ok(())
-    }
-
-    #[test]
+    #[ignore = "not supported"]
     fn pragma_query_with_schema() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let mut user_version = -1;
-        db.pragma_query(Some(DatabaseName::Main), "user_version", |row| {
-            user_version = row.get(0)?;
+        let mut version = "".to_string();
+        db.pragma_query(Some(DatabaseName::Main), "version", |row| {
+            version = row.get(0)?;
             Ok(())
         })?;
-        assert_eq!(0, user_version);
+        assert!(0 < version.len());
         Ok(())
     }
 
@@ -393,15 +382,16 @@ mod test {
     #[test]
     fn pragma_update() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        db.pragma_update(None, "user_version", &1)
+        db.pragma_update(None, "explain_output", &"PHYSICAL_ONLY")
     }
 
     #[test]
-    fn pragma_update_and_check() -> Result<()> {
+    #[ignore = "don't support query pragma"]
+    fn test_pragma_update_and_check() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let journal_mode: String =
-            db.pragma_update_and_check(None, "journal_mode", &"OFF", |row| row.get(0))?;
-        assert_eq!("off", &journal_mode);
+            db.pragma_update_and_check(None, "explain_output", &"OPTIMIZED_ONLY", |row| row.get(0))?;
+        assert_eq!("OPTIMIZED_ONLY", &journal_mode);
         Ok(())
     }
 
@@ -428,7 +418,8 @@ mod test {
     }
 
     #[test]
-    fn locking_mode() -> Result<()> {
+    #[ignore]
+    fn test_locking_mode() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let r = db.pragma_update(None, "locking_mode", &"exclusive");
         if cfg!(feature = "extra_check") {

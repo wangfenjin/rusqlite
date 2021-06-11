@@ -6,6 +6,7 @@ use rusqlite::Connection;
 
 #[test]
 #[should_panic]
+#[ignore]
 fn test_error_when_singlethread_mode() {
     // put SQLite into single-threaded mode
     unsafe {

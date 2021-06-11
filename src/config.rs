@@ -126,6 +126,7 @@ mod test {
     use crate::{Connection, Result};
 
     #[test]
+    #[ignore]
     fn test_db_config() -> Result<()> {
         let db = Connection::open_in_memory()?;
 

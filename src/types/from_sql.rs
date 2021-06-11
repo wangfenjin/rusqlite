@@ -228,6 +228,7 @@ mod test {
     use crate::{Connection, Error, Result};
 
     #[test]
+    #[ignore = "duckdb doesn't support this"]
     fn test_integral_ranges() -> Result<()> {
         let db = Connection::open_in_memory()?;
 

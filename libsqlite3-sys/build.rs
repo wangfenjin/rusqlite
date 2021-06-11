@@ -307,6 +307,8 @@ mod build_bundled {
 fn env_prefix() -> &'static str {
     if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
         "SQLCIPHER"
+    } else if cfg!(feature = "duckdb") {
+        "DUCKDB"
     } else {
         "SQLITE3"
     }
@@ -317,6 +319,8 @@ fn lib_name() -> &'static str {
         "sqlcipher"
     } else if cfg!(all(windows, feature = "winsqlite3")) {
         "winsqlite3"
+    } else if cfg!(feature = "duckdb") {
+        "duckdb"
     } else {
         "sqlite3"
     }
@@ -404,6 +408,8 @@ mod build_linked {
         // useful if you need to ensure whatever crypto library sqlcipher relies
         // on is available, for example.
         println!("cargo:link-target={}", link_lib);
+        println!("cargo:link-target={}", "sqlite3_api_wrapper");
+        println!("cargo:rustc-link-lib={}={}", find_link_mode(), "sqlite3_api_wrapper");
 
         if win_target() && cfg!(feature = "winsqlite3") {
             println!("cargo:rustc-link-lib=dylib={}", link_lib);

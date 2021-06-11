@@ -384,7 +384,7 @@ mod test {
         use uuid::Uuid;
 
         let db = Connection::open_in_memory()?;
-        db.execute_batch("CREATE TABLE foo (id BLOB CHECK(length(id) = 16), label TEXT);")?;
+        db.execute_batch("CREATE TABLE foo (id BLOB CONSTRAINT uuidchk CHECK (octet_length(id) <= 16), label TEXT);")?;
 
         let id = Uuid::new_v4();
 

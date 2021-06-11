@@ -61,36 +61,36 @@ impl InnerConnection {
 
     pub fn open_with_flags(
         c_path: &CStr,
-        flags: OpenFlags,
-        vfs: Option<&CStr>,
+        _: OpenFlags,
+        _: Option<&CStr>,
     ) -> Result<InnerConnection> {
-        #[cfg(not(feature = "bundled"))]
-        ensure_valid_sqlite_version();
-        ensure_safe_sqlite_threading_mode()?;
+        // #[cfg(not(feature = "bundled"))]
+        // ensure_valid_sqlite_version();
+        // ensure_safe_sqlite_threading_mode()?;
 
         // Replicate the check for sane open flags from SQLite, because the check in
         // SQLite itself wasn't added until version 3.7.3.
-        debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_ONLY.bits, 0x02);
-        debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_WRITE.bits, 0x04);
-        debug_assert_eq!(
-            1 << (OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE).bits,
-            0x40
-        );
-        if (1 << (flags.bits & 0x7)) & 0x46 == 0 {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_MISUSE),
-                None,
-            ));
-        }
+        // debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_ONLY.bits, 0x02);
+        // debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_WRITE.bits, 0x04);
+        // debug_assert_eq!(
+        //     1 << (OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE).bits,
+        //     0x40
+        // );
+        // if (1 << (flags.bits & 0x7)) & 0x46 == 0 {
+        //     return Err(Error::SqliteFailure(
+        //         ffi::Error::new(ffi::SQLITE_MISUSE),
+        //         None,
+        //     ));
+        // }
 
-        let z_vfs = match vfs {
-            Some(c_vfs) => c_vfs.as_ptr(),
-            None => ptr::null(),
-        };
+        // let z_vfs = match vfs {
+        //     Some(c_vfs) => c_vfs.as_ptr(),
+        //     None => ptr::null(),
+        // };
 
         unsafe {
             let mut db: *mut ffi::sqlite3 = ptr::null_mut();
-            let r = ffi::sqlite3_open_v2(c_path.as_ptr(), &mut db, flags.bits(), z_vfs);
+            let r = ffi::sqlite3_open_v2(c_path.as_ptr(), &mut db, 0, ptr::null());
             if r != ffi::SQLITE_OK {
                 let e = if db.is_null() {
                     error_from_sqlite_code(r, Some(c_path.to_string_lossy().to_string()))
@@ -117,14 +117,14 @@ impl InnerConnection {
             }
 
             // attempt to turn on extended results code; don't fail if we can't.
-            ffi::sqlite3_extended_result_codes(db, 1);
+            // ffi::sqlite3_extended_result_codes(db, 1);
 
-            let r = ffi::sqlite3_busy_timeout(db, 5000);
-            if r != ffi::SQLITE_OK {
-                let e = error_from_handle(db, r);
-                ffi::sqlite3_close(db);
-                return Err(e);
-            }
+            // let r = ffi::sqlite3_busy_timeout(db, 5000);
+            // if r != ffi::SQLITE_OK {
+            //     let e = error_from_handle(db, r);
+            //     ffi::sqlite3_close(db);
+            //     return Err(e);
+            // }
 
             Ok(InnerConnection::new(db, true))
         }
@@ -324,11 +324,13 @@ impl Drop for InnerConnection {
 }
 
 #[cfg(not(feature = "bundled"))]
+#[allow(dead_code)]
 static SQLITE_VERSION_CHECK: std::sync::Once = std::sync::Once::new();
 #[cfg(not(feature = "bundled"))]
 pub static BYPASS_VERSION_CHECK: AtomicBool = AtomicBool::new(false);
 
 #[cfg(not(feature = "bundled"))]
+#[allow(dead_code)]
 fn ensure_valid_sqlite_version() {
     use crate::version::version;
 
@@ -385,7 +387,11 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
 }
 
 #[cfg(not(any(target_arch = "wasm32")))]
+#[allow(dead_code)]
+#[allow(unreachable_code)]
 fn ensure_safe_sqlite_threading_mode() -> Result<()> {
+    return Ok(());
+
     // Ensure SQLite was compiled in thredsafe mode.
     if unsafe { ffi::sqlite3_threadsafe() == 0 } {
         return Err(Error::SqliteSingleThreadedMode);

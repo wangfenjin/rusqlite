@@ -41,6 +41,14 @@ impl<'a> ValueRef<'a> {
     pub fn as_i64(&self) -> FromSqlResult<i64> {
         match *self {
             ValueRef::Integer(i) => Ok(i),
+            ValueRef::Text(a) => {
+                let s = std::str::from_utf8(a).expect("invalid UTF-8");
+                match s.parse::<i64>() {
+                    Ok(i) => Ok(i),
+                    // TODO(wangfenjin): update error type as parse error
+                    _ => Err(FromSqlError::InvalidType),
+                }
+            },
             _ => Err(FromSqlError::InvalidType),
         }
     }

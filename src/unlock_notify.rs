@@ -100,7 +100,7 @@ pub unsafe fn wait_for_unlock_notify(_db: *mut ffi::sqlite3) -> c_int {
 #[cfg(feature = "unlock_notify")]
 #[cfg(test)]
 mod test {
-    use crate::{Connection, OpenFlags, Result, Transaction, TransactionBehavior};
+    use crate::{Connection, OpenFlags, Result, Transaction};
     use std::sync::mpsc::sync_channel;
     use std::thread;
     use std::time;
@@ -114,7 +114,7 @@ mod test {
         let (rx, tx) = sync_channel(0);
         let child = thread::spawn(move || {
             let mut db2 = Connection::open_with_flags(url, flags).unwrap();
-            let tx2 = Transaction::new(&mut db2, TransactionBehavior::Immediate).unwrap();
+            let tx2 = Transaction::new(&mut db2).unwrap();
             tx2.execute_batch("INSERT INTO foo VALUES (42)").unwrap();
             rx.send(1).unwrap();
             let ten_millis = time::Duration::from_millis(10);

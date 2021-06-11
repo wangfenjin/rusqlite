@@ -23,6 +23,7 @@ name = "rusqlite"
 members = ["libsqlite3-sys"]
 
 [features]
+duckdb = ["libsqlite3-sys/duckdb"]
 load_extension = []
 # hot-backup interface: 3.6.11 (2009-02-18)
 backup = ["libsqlite3-sys/min_sqlite_version_3_6_23"]
@@ -94,6 +95,13 @@ modern-full = [
     "uuid",
     "vtab",
     "window",
+]
+
+duckdb-full = [
+    "duckdb",
+    "serde_json",
+    "url",
+    "uuid",
 ]
 
 bundled-full = ["modern-full", "bundled"]

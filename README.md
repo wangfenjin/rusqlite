@@ -25,21 +25,22 @@ struct Person {
 fn main() -> Result<()> {
     let conn = Connection::open_in_memory()?;
 
-    conn.execute(
-        "CREATE TABLE person (
-                  id              INTEGER PRIMARY KEY,
+    conn.execute_batch(
+        r"CREATE SEQUENCE seq;
+          CREATE TABLE person (
+                  id              INTEGER PRIMARY KEY DEFAULT NEXTVAL('seq'),
                   name            TEXT NOT NULL,
                   data            BLOB
-                  )",
-        [],
-    )?;
+                  );
+        ")?;
+
     let me = Person {
         id: 0,
         name: "Steven".to_string(),
         data: None,
     };
     conn.execute(
-        "INSERT INTO person (name, data) VALUES (?1, ?2)",
+        "INSERT INTO person (name, data) VALUES (?, ?)",
         params![me.name, me.data],
     )?;
 

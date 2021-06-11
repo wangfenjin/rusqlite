@@ -86,45 +86,6 @@ use sealed::Sealed;
 /// }
 /// ```
 ///
-/// ## Named parameters
-///
-/// SQLite lets you name parameters using a number of conventions (":foo",
-/// "@foo", "$foo"). You can pass named parameters in to SQLite using rusqlite
-/// in a few ways:
-///
-/// - Using the [`rusqlite::named_params!`](crate::named_params!) macro, as in
-///   `stmt.execute(named_params!{ ":name": "foo", ":age": 99 })`. Similar to
-///   the `params` macro, this is most useful for heterogeneous lists of
-///   parameters, or lists where the number of parameters exceeds 32.
-///
-/// - As a slice of `&[(&str, &dyn ToSql)]`. This is what essentially all of
-///   these boil down to in the end, conceptually at least. In theory you can
-///   pass this as `stmt.
-///
-/// - As array references, similar to the positional params. This looks like
-///   `thing.query(&[(":foo", &1i32), (":bar", &2i32)])` or
-///   `thing.query(&[(":foo", "abc"), (":bar", "def")])`.
-///
-/// Note: Unbound named parameters will be left to the value they previously
-/// were bound with, falling back to `NULL` for parameters which have never been
-/// bound.
-///
-/// ### Example (named)
-///
-/// ```rust,no_run
-/// # use rusqlite::{Connection, Result, named_params};
-/// fn insert(conn: &Connection) -> Result<()> {
-///     let mut stmt = conn.prepare("INSERT INTO test (key, value) VALUES (:key, :value)")?;
-///     // Using `rusqlite::params!`:
-///     stmt.execute(named_params!{ ":key": "one", ":val": 2 })?;
-///     // Alternatively:
-///     stmt.execute(&[(":key", "three"), (":val", "four")])?;
-///     // Or:
-///     stmt.execute(&[(":key", &100), (":val", &200)])?;
-///     Ok(())
-/// }
-/// ```
-///
 /// ## No parameters
 ///
 /// You can just use an empty array literal for no params. The
@@ -188,14 +149,6 @@ impl Params for &[&dyn ToSql] {
     }
 }
 
-impl Sealed for &[(&str, &dyn ToSql)] {}
-impl Params for &[(&str, &dyn ToSql)] {
-    #[inline]
-    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-        stmt.bind_parameters_named(self)
-    }
-}
-
 macro_rules! impl_for_array_ref {
     ($($N:literal)+) => {$(
         // These are already generic, and there's a shedload of them, so lets
@@ -204,12 +157,6 @@ macro_rules! impl_for_array_ref {
         impl<T: ToSql + ?Sized> Params for &[&T; $N] {
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.bind_parameters(self)
-            }
-        }
-        impl<T: ToSql + ?Sized> Sealed for &[(&str, &T); $N] {}
-        impl<T: ToSql + ?Sized> Params for &[(&str, &T); $N] {
-            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-                stmt.bind_parameters_named(self)
             }
         }
         impl<T: ToSql> Sealed for [T; $N] {}

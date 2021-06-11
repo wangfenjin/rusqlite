@@ -1,3 +1,5 @@
 /target/
 /doc/
 Cargo.lock
+.cargo/
+no_such_file.db

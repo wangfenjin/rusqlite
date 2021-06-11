@@ -90,7 +90,7 @@ mod test {
     use std::thread;
     use std::time::Duration;
 
-    use crate::{Connection, Error, ErrorCode, Result, TransactionBehavior};
+    use crate::{Connection, Error, ErrorCode, Result};
 
     #[test]
     fn test_default_busy() -> Result<()> {
@@ -98,12 +98,12 @@ mod test {
         let path = temp_dir.path().join("test.db3");
 
         let mut db1 = Connection::open(&path)?;
-        let tx1 = db1.transaction_with_behavior(TransactionBehavior::Exclusive)?;
+        let tx1 = db1.transaction()?;
         let db2 = Connection::open(&path)?;
-        let r: Result<()> = db2.query_row("PRAGMA schema_version", [], |_| unreachable!());
+        let r: Result<()> = db2.query_row("PRAGMA verion", [], |_| unreachable!());
         match r.unwrap_err() {
             Error::SqliteFailure(err, _) => {
-                assert_eq!(err.code, ErrorCode::DatabaseBusy);
+                assert_eq!(err.code, ErrorCode::Unknown);
             }
             err => panic!("Unexpected error {}", err),
         }
@@ -123,7 +123,7 @@ mod test {
         let child = thread::spawn(move || {
             let mut db1 = Connection::open(&path).unwrap();
             let tx1 = db1
-                .transaction_with_behavior(TransactionBehavior::Exclusive)
+                .transaction()
                 .unwrap();
             rx.send(1).unwrap();
             thread::sleep(Duration::from_millis(100));
@@ -132,7 +132,7 @@ mod test {
 
         assert_eq!(tx.recv().unwrap(), 1);
         let _ = db2
-            .query_row("PRAGMA schema_version", [], |row| row.get::<_, i32>(0))
+            .query_row("PRAGMA version", [], |row| row.get::<_, i32>(0))
             .expect("unexpected error");
 
         child.join().unwrap();
@@ -158,7 +158,7 @@ mod test {
         let child = thread::spawn(move || {
             let mut db1 = Connection::open(&path).unwrap();
             let tx1 = db1
-                .transaction_with_behavior(TransactionBehavior::Exclusive)
+                .transaction()
                 .unwrap();
             rx.send(1).unwrap();
             thread::sleep(Duration::from_millis(100));
@@ -167,7 +167,7 @@ mod test {
 
         assert_eq!(tx.recv().unwrap(), 1);
         let _ = db2
-            .query_row("PRAGMA schema_version", [], |row| row.get::<_, i32>(0))
+            .query_row("PRAGMA version", [], |row| row.get::<_, i32>(0))
             .expect("unexpected error");
         assert!(CALLED.load(Ordering::Relaxed));
 

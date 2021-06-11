@@ -103,8 +103,8 @@ impl Transaction<'_> {
     /// so as to prevent nested transactions on the same connection. For cases
     /// where this is unacceptable, [`Transaction::new_unchecked`] is available.
     #[inline]
-    pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
-        Self::new_unchecked(conn, behavior)
+    pub fn new(conn: &mut Connection) -> Result<Transaction<'_>> {
+        Self::new_unchecked(conn, TransactionBehavior::Deferred)
     }
 
     /// Begin a new transaction, failing if a transaction is open.
@@ -113,15 +113,17 @@ impl Transaction<'_> {
     /// possible, [`Transaction::new`] should be preferred, as it provides a
     /// compile-time guarantee that transactions are not nested.
     #[inline]
-    pub fn new_unchecked(
+    fn new_unchecked(
         conn: &Connection,
-        behavior: TransactionBehavior,
+        _: TransactionBehavior,
     ) -> Result<Transaction<'_>> {
-        let query = match behavior {
-            TransactionBehavior::Deferred => "BEGIN DEFERRED",
-            TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
-            TransactionBehavior::Exclusive => "BEGIN EXCLUSIVE",
-        };
+        // TODO(wangfenjin): not supported
+        // let query = match behavior {
+        //     TransactionBehavior::Deferred => "BEGIN DEFERRED",
+        //     TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
+        //     TransactionBehavior::Exclusive => "BEGIN EXCLUSIVE",
+        // };
+        let query = "BEGIN Transaction";
         conn.execute_batch(query).map(move |_| Transaction {
             conn,
             drop_behavior: DropBehavior::Rollback,
@@ -217,6 +219,7 @@ impl Transaction<'_> {
     #[inline]
     fn finish_(&mut self) -> Result<()> {
         if self.conn.is_autocommit() {
+            println!("is autocommit");
             return Ok(());
         }
         match self.drop_behavior() {
@@ -241,6 +244,7 @@ impl Deref for Transaction<'_> {
 impl Drop for Transaction<'_> {
     #[inline]
     fn drop(&mut self) {
+        println!("drop called");
         self.finish_();
     }
 }
@@ -402,7 +406,7 @@ impl Connection {
     /// Will return `Err` if the underlying SQLite call fails.
     #[inline]
     pub fn transaction(&mut self) -> Result<Transaction<'_>> {
-        Transaction::new(self, TransactionBehavior::Deferred)
+        Transaction::new(self)
     }
 
     /// Begin a new transaction with a specified behavior.
@@ -413,11 +417,12 @@ impl Connection {
     ///
     /// Will return `Err` if the underlying SQLite call fails.
     #[inline]
-    pub fn transaction_with_behavior(
+    #[allow(dead_code)]
+    fn transaction_with_behavior(
         &mut self,
         behavior: TransactionBehavior,
     ) -> Result<Transaction<'_>> {
-        Transaction::new(self, behavior)
+        Transaction::new_unchecked(self, behavior)
     }
 
     /// Begin a new transaction with the default behavior (DEFERRED).
@@ -502,20 +507,23 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use super::DropBehavior;
-    use crate::{Connection, Error, Result};
+    use crate::{Connection, Result};
 
-    fn checked_memory_handle() -> Result<Connection> {
+    fn checked_no_autocommit_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
-        db.execute_batch("CREATE TABLE foo (x INTEGER)")?;
+        db.execute_batch(r"
+            CREATE TABLE foo (x INTEGER);
+            SET AUTOCOMMIT TO OFF;
+        ")?;
         Ok(db)
     }
 
     #[test]
     fn test_drop() -> Result<()> {
-        let mut db = checked_memory_handle()?;
+        let mut db = checked_no_autocommit_memory_handle()?;
         {
             let tx = db.transaction()?;
-            tx.execute_batch("INSERT INTO foo VALUES(1)")?;
+            assert!(tx.execute_batch("INSERT INTO foo VALUES(1)").is_ok());
             // default: rollback
         }
         {
@@ -532,34 +540,21 @@ mod test {
         }
         Ok(())
     }
-    fn assert_nested_tx_error(e: crate::Error) {
-        if let Error::SqliteFailure(e, Some(m)) = &e {
-            assert_eq!(e.extended_code, crate::ffi::SQLITE_ERROR);
-            // FIXME: Not ideal...
-            assert_eq!(e.code, crate::ErrorCode::Unknown);
-            assert!(m.contains("transaction"));
-        } else {
-            panic!("Unexpected error type: {:?}", e);
-        }
-    }
 
     #[test]
     fn test_unchecked_nesting() -> Result<()> {
-        let db = checked_memory_handle()?;
+        let db = checked_no_autocommit_memory_handle()?;
 
         {
-            let tx = db.unchecked_transaction()?;
-            let e = tx.unchecked_transaction().unwrap_err();
-            assert_nested_tx_error(e);
+            db.unchecked_transaction()?;
             // default: rollback
         }
         {
             let tx = db.unchecked_transaction()?;
             tx.execute_batch("INSERT INTO foo VALUES(1)")?;
             // Ensure this doesn't interfere with ongoing transaction
-            let e = tx.unchecked_transaction().unwrap_err();
-            assert_nested_tx_error(e);
-
+            // let e = tx.unchecked_transaction().unwrap_err();
+            // assert_nested_tx_error(e);
             tx.execute_batch("INSERT INTO foo VALUES(1)")?;
             tx.commit()?;
         }
@@ -573,17 +568,11 @@ mod test {
 
     #[test]
     fn test_explicit_rollback_commit() -> Result<()> {
-        let mut db = checked_memory_handle()?;
+        let mut db = checked_no_autocommit_memory_handle()?;
         {
-            let mut tx = db.transaction()?;
-            {
-                let mut sp = tx.savepoint()?;
-                sp.execute_batch("INSERT INTO foo VALUES(1)")?;
-                sp.rollback()?;
-                sp.execute_batch("INSERT INTO foo VALUES(2)")?;
-                sp.commit()?;
-            }
-            tx.commit()?;
+            let tx = db.transaction()?;
+            tx.execute_batch("INSERT INTO foo VALUES(1)")?;
+            tx.rollback()?;
         }
         {
             let tx = db.transaction()?;
@@ -593,7 +582,7 @@ mod test {
         {
             let tx = db.transaction()?;
             assert_eq!(
-                6i32,
+                4i32,
                 tx.query_row::<i32, _, _>("SELECT SUM(x) FROM foo", [], |r| r.get(0))?
             );
         }
@@ -601,8 +590,9 @@ mod test {
     }
 
     #[test]
+    #[ignore = "not supported"]
     fn test_savepoint() -> Result<()> {
-        let mut db = checked_memory_handle()?;
+        let mut db = checked_no_autocommit_memory_handle()?;
         {
             let mut tx = db.transaction()?;
             tx.execute_batch("INSERT INTO foo VALUES(1)")?;
@@ -636,8 +626,9 @@ mod test {
     }
 
     #[test]
+    #[ignore = "not supported"]
     fn test_ignore_drop_behavior() -> Result<()> {
-        let mut db = checked_memory_handle()?;
+        let mut db = checked_no_autocommit_memory_handle()?;
 
         let mut tx = db.transaction()?;
         {
@@ -658,8 +649,9 @@ mod test {
     }
 
     #[test]
+    #[ignore = "not supported"]
     fn test_savepoint_names() -> Result<()> {
-        let mut db = checked_memory_handle()?;
+        let mut db = checked_no_autocommit_memory_handle()?;
 
         {
             let mut sp1 = db.savepoint_with_name("my_sp")?;

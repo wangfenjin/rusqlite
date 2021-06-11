@@ -201,7 +201,7 @@ mod test {
         assert_eq!(0, cache.len());
         assert!(initial_capacity > 0);
 
-        let sql = "PRAGMA schema_version";
+        let sql = "PRAGMA database_list";
         {
             let mut stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
@@ -227,7 +227,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         let cache = &db.cache;
 
-        let sql = "PRAGMA schema_version";
+        let sql = "PRAGMA database_list";
         {
             let mut stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
@@ -260,7 +260,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         let cache = &db.cache;
 
-        let sql = "PRAGMA schema_version";
+        let sql = "PRAGMA database_list";
         {
             let mut stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
@@ -270,9 +270,8 @@ mod test {
         assert_eq!(0, cache.len());
         Ok(())
     }
-
     #[test]
-    fn test_ddl() -> Result<()> {
+    fn test_ddl_should_fail_if_change_schema() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch(
             r#"
@@ -296,10 +295,44 @@ mod test {
         )?;
 
         {
+            // Rebinding statement after catalog change resulted in change of types
+            let mut stmt = db.prepare_cached(sql)?;
+            let result: Result<Option<(i32, i32)>, _> = stmt.query([])?.map(|r| Ok((r.get(0)?, r.get(1)?))).next();
+            assert!(result.is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_ddl() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch(
+            r#"
+            CREATE TABLE foo (x INT);
+            INSERT INTO foo VALUES (1);
+        "#,
+        )?;
+
+        let sql = "SELECT SUM(x) FROM foo";
+
+        {
+            let mut stmt = db.prepare_cached(sql)?;
+            assert_eq!(Ok(Some(1i32)), stmt.query([])?.map(|r| r.get(0)).next());
+        }
+
+        db.execute_batch(
+            r#"
+            INSERT INTO foo VALUES (2);
+            INSERT INTO foo VALUES (3);
+        "#,
+        )?;
+
+        {
+            // Rebinding statement after catalog change resulted in change of types
             let mut stmt = db.prepare_cached(sql)?;
             assert_eq!(
-                Ok(Some((1i32, 2i32))),
-                stmt.query([])?.map(|r| Ok((r.get(0)?, r.get(1)?))).next()
+                Ok(Some(6i32)),
+                stmt.query([])?.map(|r| (r.get(0))).next()
             );
         }
         Ok(())
@@ -311,30 +344,6 @@ mod test {
         conn.prepare_cached("SELECT * FROM sqlite_master;")?;
 
         conn.close().expect("connection not closed");
-        Ok(())
-    }
-
-    #[test]
-    fn test_cache_key() -> Result<()> {
-        let db = Connection::open_in_memory()?;
-        let cache = &db.cache;
-        assert_eq!(0, cache.len());
-
-        //let sql = " PRAGMA schema_version; -- comment";
-        let sql = "PRAGMA schema_version; ";
-        {
-            let mut stmt = db.prepare_cached(sql)?;
-            assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
-        }
-        assert_eq!(1, cache.len());
-
-        {
-            let mut stmt = db.prepare_cached(sql)?;
-            assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
-        }
-        assert_eq!(1, cache.len());
         Ok(())
     }
 
